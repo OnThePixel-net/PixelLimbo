@@ -191,29 +191,45 @@ public final class Main {
                     }
                 }
 
-                // Kernel-Sicht: was hört wirklich auf welchem Port?
-                try {
-                    java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Path.of("/proc/net/tcp"));
-                    System.out.println("[PixelLimo][kernel] LISTEN-Sockets (aus /proc/net/tcp):");
-                    for (String line : lines) {
-                        // Format: sl local_addr:port remote_addr:port state ...
-                        // state 0A = LISTEN
-                        String[] parts = line.trim().split("\\s+");
-                        if (parts.length < 4) continue;
-                        if (!"0A".equals(parts[3])) continue;
-                        String[] localPair = parts[1].split(":");
-                        if (localPair.length != 2) continue;
-                        int hexPort = Integer.parseInt(localPair[1], 16);
-                        long hexAddr = Long.parseLong(localPair[0], 16);
-                        // little-endian IPv4
-                        String ip = String.format("%d.%d.%d.%d",
-                                hexAddr & 0xff, (hexAddr >> 8) & 0xff,
-                                (hexAddr >> 16) & 0xff, (hexAddr >> 24) & 0xff);
-                        System.out.printf("[PixelLimo][kernel]   %s:%d%n", ip, hexPort);
+                // Kernel-Sicht IPv4 + IPv6
+                for (String file : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
+                    try {
+                        java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Path.of(file));
+                        System.out.println("[PixelLimo][kernel] LISTEN-Sockets aus " + file + ":");
+                        for (String line : lines) {
+                            String[] parts = line.trim().split("\\s+");
+                            if (parts.length < 4) continue;
+                            if (!"0A".equals(parts[3])) continue;
+                            System.out.printf("[PixelLimo][kernel]   %s%n", parts[1]);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[PixelLimo][kernel] " + file + " lesen fail: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    System.err.println("[PixelLimo][kernel] /proc/net/tcp lesen fail: " + e.getMessage());
                 }
+
+                // Reachability-Test: andere PC-Services + Velocity erreichbar?
+                System.out.println("[PixelLimo][reach] Test zu anderen PC-Services:");
+                int[] testPorts = {25565, 30000, 30001, 30002, 30003, 30004, 30005, 16000};
+                String[] testHosts = {"127.0.0.1", "172.18.0.1"};
+                for (String th : testHosts) {
+                    for (int tp : testPorts) {
+                        try (java.net.Socket s = new java.net.Socket()) {
+                            s.connect(new java.net.InetSocketAddress(th, tp), 500);
+                            System.out.printf("[PixelLimo][reach] OK   %s:%d%n", th, tp);
+                        } catch (Exception e) {
+                            // Nur loggen wenn refused (bedeutet "kein Host"). Timeout/unreachable = silent.
+                            String msg = e.getMessage() == null ? "" : e.getMessage();
+                            if (msg.contains("refused") || msg.contains("Connection")) {
+                                System.out.printf("[PixelLimo][reach] FAIL %s:%d (%s)%n", th, tp, msg);
+                            }
+                        }
+                    }
+                }
+
+                // Hostname für Debug
+                try {
+                    System.out.println("[PixelLimo][reach] hostname=" + java.net.InetAddress.getLocalHost().getHostName());
+                } catch (Exception ignored) {}
             } catch (InterruptedException ignored) {}
         }, "limbo-selftest").start();
 
