@@ -16,6 +16,12 @@ import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.LightingChunk;
 import net.minestom.server.ping.Status;
 import net.minestom.server.world.DimensionType;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import net.lenni0451.optconfig.ConfigLoader;
+import net.lenni0451.optconfig.provider.ConfigProvider;
+import net.raphimc.viaproxy.ViaProxy;
+import net.raphimc.viaproxy.protocoltranslator.ProtocolTranslator;
+import net.raphimc.viaproxy.protocoltranslator.viaproxy.ViaProxyConfig;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -122,20 +128,35 @@ public final class Main {
 
         MinecraftServer.setBrandName("PixelLimo");
 
-        // Bind dual-stack on IPv6 wildcard when host is the IPv4 wildcard.
-        // Netty epoll clients (e.g. PotatoCloud's Velocity plugin) connect
-        // via IPv4-mapped-IPv6, which an IPv4-only listener refuses even
-        // though the bind itself succeeds. Note: `new InetSocketAddress(port)`
-        // is NOT enough — Java's anyLocalAddress() returns Inet4Address by
-        // default, so we explicitly resolve "::" to force IPv6.
+        boolean gatewayEnabled = Boolean.parseBoolean(cfg.getProperty("gateway.enabled", "true"));
+        int nativeProtocol = Integer.parseInt(cfg.getProperty("gateway.native-protocol", "774"));
+        // backend-port=0 → kernel picks an ephemeral port (high 49152-65535
+        // range, randomized each start). Set a fixed number if you need a
+        // predictable port for e.g. firewall rules.
+        int backendPort = Integer.parseInt(cfg.getProperty("gateway.backend-port", "0"));
+
         SocketAddress bindAddr;
-        if (host == null || host.isBlank() || "0.0.0.0".equals(host)) {
-            bindAddr = new InetSocketAddress(InetAddress.getByName("::"), port);
+        if (gatewayEnabled) {
+            bindAddr = new InetSocketAddress("127.0.0.1", backendPort);
         } else {
-            bindAddr = new InetSocketAddress(host, port);
+            if (host == null || host.isBlank() || "0.0.0.0".equals(host)) {
+                bindAddr = new InetSocketAddress(InetAddress.getByName("::"), port);
+            } else {
+                bindAddr = new InetSocketAddress(host, port);
+            }
         }
         server.start(bindAddr);
-        System.out.printf("%s Server listening on %s%n", LOG_TAG, bindAddr);
+
+        int actualBackendPort = backendPort;
+        if (gatewayEnabled) {
+            // Read the actual kernel-assigned port (only when we used 0)
+            actualBackendPort = MinecraftServer.process().server().getPort();
+        }
+        System.out.printf("%s Minestom listening on 127.0.0.1:%d%n", LOG_TAG, actualBackendPort);
+
+        if (gatewayEnabled) {
+            startViaProxy(host, port, actualBackendPort, nativeProtocol);
+        }
 
         PotatoCloudConnector.notifyStartedIfManaged();
 
@@ -145,6 +166,40 @@ public final class Main {
         Object holdAlive = new Object();
         synchronized (holdAlive) {
             holdAlive.wait();
+        }
+    }
+
+    private static void startViaProxy(String host, int publicPort, int backendPort, int nativeProtocol) {
+        try {
+            ConfigLoader<ViaProxyConfig> loader = new ConfigLoader<>(ViaProxyConfig.class);
+            loader.getConfigOptions().setResetInvalidOptions(true).setRewriteConfig(true).setCommentSpacing(1);
+
+            new java.io.File("viaproxy").mkdirs();
+            java.lang.reflect.Field cwdField = ViaProxy.class.getDeclaredField("CWD");
+            cwdField.setAccessible(true);
+            cwdField.set(null, new java.io.File("viaproxy"));
+
+            ViaProxyConfig config = loader.load(ConfigProvider.memory("", s -> {})).getConfigInstance();
+            java.lang.reflect.Field configField = ViaProxy.class.getDeclaredField("CONFIG");
+            configField.setAccessible(true);
+            configField.set(null, config);
+
+            String bindHost = (host == null || host.isBlank() || "0.0.0.0".equals(host)) ? "0.0.0.0" : host;
+            config.setBindAddress(new InetSocketAddress(bindHost, publicPort));
+            config.setTargetAddress(new InetSocketAddress("127.0.0.1", backendPort));
+            config.setTargetVersion(ProtocolVersion.getProtocol(nativeProtocol));
+
+            java.lang.reflect.Method loadNetty = ViaProxy.class.getDeclaredMethod("loadNetty");
+            loadNetty.setAccessible(true);
+            loadNetty.invoke(null);
+            ProtocolTranslator.init();
+            ViaProxy.startProxy();
+
+            System.out.printf("%s ViaProxy started on %s:%d -> 127.0.0.1:%d (target=%s)%n",
+                    LOG_TAG, bindHost, publicPort, backendPort, ProtocolVersion.getProtocol(nativeProtocol));
+        } catch (Exception e) {
+            System.err.println(LOG_TAG + " ViaProxy start failed: " + e);
+            e.printStackTrace();
         }
     }
 

@@ -64,6 +64,16 @@ public final class Config {
         p.setProperty("limbo.freeze", "false");
         p.setProperty("tab.header", "§b§lPixelLimo");
         p.setProperty("tab.footer", "§7AFK-Lobby");
+        // Multi-version gateway: a Netty front-end binds the public
+        // server.port. Minestom binds a Unix Domain Socket (no second TCP
+        // port) and the gateway forwards translated bytes through it.
+        // Non-matching protocol versions get a clean Login Disconnect today;
+        // future work plugs ViaVersion translation in there.
+        p.setProperty("gateway.enabled", "true");
+        p.setProperty("gateway.socket-path", "");  // empty = auto in tmpdir
+        // Minestom 2026.05.17-1.21.11 speaks protocol 774 (Java 1.21.11).
+        // MC 26.1 / 26.1.2 = protocol 775 — different protocol, gets kicked.
+        p.setProperty("gateway.native-protocol", "774");
         return p;
     }
 
