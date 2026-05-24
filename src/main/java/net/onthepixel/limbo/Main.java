@@ -152,15 +152,25 @@ public final class Main {
             }
         }));
 
-        // Start
+        // Start — dual-stack bind via IPv6-Wildcard wenn host=0.0.0.0,
+        // sonst akzeptiert Netty-Epoll-Client (z.B. PotatoCloud-Velocity-Plugin)
+        // keine Verbindungen weil der IPv4-mapped-IPv6 connectet
+        java.net.SocketAddress bindAddr;
+        if ("0.0.0.0".equals(host) || host == null || host.isBlank()) {
+            // Dual-Stack: bind auf IPv6-Wildcard (::), akzeptiert IPv4 + IPv6
+            bindAddr = new java.net.InetSocketAddress(port);
+        } else {
+            bindAddr = new java.net.InetSocketAddress(host, port);
+        }
         try {
-            server.start(host, port);
+            server.start(bindAddr);
         } catch (Throwable t) {
             System.err.println("[PixelLimo][FATAL] server.start fehlgeschlagen: " + t);
             t.printStackTrace();
             throw t;
         }
-        System.out.printf("[PixelLimo] Server läuft auf %s:%d (online-mode=%s)%n", host, port, onlineMode);
+        System.out.printf("[PixelLimo] Server läuft auf %s (online-mode=%s, dual-stack=%s)%n",
+                bindAddr, onlineMode, bindAddr instanceof java.net.InetSocketAddress isa && isa.getAddress() instanceof java.net.Inet6Address);
 
         // Self-Bind-Test + Kernel-Listen-Dump: was sehen wir wirklich?
         new Thread(() -> {
