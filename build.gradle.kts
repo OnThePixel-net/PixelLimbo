@@ -4,7 +4,7 @@ plugins {
     id("com.gradleup.shadow") version "8.3.5"
 }
 
-group = "de.leos.limbo"
+group = "net.onthepixel.limbo"
 version = "1.0.0"
 
 repositories {
@@ -24,7 +24,7 @@ java {
 }
 
 application {
-    mainClass.set("de.leos.limbo.Main")
+    mainClass.set("net.onthepixel.limbo.Main")
 }
 
 tasks.shadowJar {

@@ -1,4 +1,4 @@
-package de.leos.limbo;
+package net.onthepixel.limbo;
 
 import java.io.IOException;
 import java.io.InputStream;

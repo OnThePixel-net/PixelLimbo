@@ -1,4 +1,4 @@
-package de.leos.limbo;
+package net.onthepixel.limbo;
 
 import net.minestom.server.coordinate.Pos;
 import net.minestom.server.instance.Instance;

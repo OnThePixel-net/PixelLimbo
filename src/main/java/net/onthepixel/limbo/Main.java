@@ -1,4 +1,4 @@
-package de.leos.limbo;
+package net.onthepixel.limbo;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
