@@ -7,16 +7,16 @@ Loads a SpongeSchematic as a static world and parks players there — designed a
 ```
                                                 ┌──────────────────────┐
    Client (1.7 – 26.1.2)  ───► public TCP 25565 │ ViaProxy (embedded)  │
-                                                │  • protocol detect    │
-                                                │  • packet translation │
+                                                │  • protocol detect   │
+                                                │  • packet translation│
                                                 └──────────┬───────────┘
                                                            │ 127.0.0.1:ephemeral
                                                            ▼
                                                 ┌──────────────────────┐
-                                                │ Minestom (1.21.11)    │
-                                                │  • schematic world    │
-                                                │  • event handlers     │
-                                                │  • spawn / tab / MOTD │
+                                                │ Minestom (1.21.11)   │
+                                                │  • schematic world   │
+                                                │  • event handlers    │
+                                                │  • spawn / tab / MOTD│
                                                 └──────────────────────┘
 ```
 
