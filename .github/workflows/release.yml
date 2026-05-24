@@ -1,18 +1,23 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  attach-jar:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -26,7 +31,36 @@ jobs:
       - name: Build shadowJar
         run: ./gradlew --no-daemon shadowJar
 
-      - name: Attach jar to release
+      # --- Auto-Release: bei Push auf main neuen Tag bauen ---
+      - name: Compute auto-tag
+        if: github.event_name == 'push'
+        id: tag
+        run: |
+          # Tag-Format: build-<count>-<shortSha>  (eindeutig + sortierbar)
+          COUNT=$(git rev-list --count HEAD)
+          SHORT=${GITHUB_SHA::7}
+          echo "tag=build-${COUNT}-${SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Create auto-release with jar
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          body: |
+            Auto-Release vom Push `${{ github.sha }}`.
+
+            **Commit-Message:** ${{ github.event.head_commit.message }}
+
+            PotatoCloud-URL (immer aktuellster Release):
+            `https://github.com/OnThePixel-net/PixelLimbo/releases/latest/download/pixellimo.jar`
+          files: build/libs/pixellimo.jar
+          fail_on_unmatched_files: true
+          make_latest: true
+
+      # --- Manueller Release-Trigger: Jar an existierendes Release anhängen ---
+      - name: Attach jar to manual release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: build/libs/pixellimo.jar
