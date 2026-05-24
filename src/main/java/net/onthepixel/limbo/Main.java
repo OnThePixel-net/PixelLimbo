@@ -128,6 +128,9 @@ public final class Main {
         // Start
         server.start(host, port);
         System.out.printf("[PixelLimo] Server läuft auf %s:%d (online-mode=%s)%n", host, port, onlineMode);
+
+        // PotatoCloud: Service als RUNNING markieren (nur wenn unter PC gestartet)
+        PotatoCloudConnector.notifyStartedIfManaged();
     }
 
     private Main() {}
