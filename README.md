@@ -58,7 +58,7 @@ Wenn eine `server.properties` neben `limbo.properties` liegt, werden `server-por
 
 ## PotatoCloud-Integration
 
-Als Custom-Platform einbindbar. Beispiel-Eintrag in `platforms.yml`:
+Als Custom-Platform einbindbar. Lädt automatisch immer das neueste GitHub-Release. Eintrag in `platforms.yml`:
 
 ```yaml
 pixellimo:
@@ -70,13 +70,13 @@ pixellimo:
     - port
     - setup-proxy
   versions:
-    - version: 1.0.0
-      local: true
+    - version: latest
+      download: https://github.com/OnThePixel-net/PixelLimbo/releases/latest/download/pixellimo.jar
 ```
 
-Jar muss unter `platforms/pixellimo/1.0.0/pixellimo-1.0.0.jar` im PotatoCloud-Run-Verzeichnis liegen.
+Dann: `group create lobby pixellimo latest`
 
-Dann: `group create lobby pixellimo 1.0.0`
+Jedes neue Release auf GitHub triggert den Release-Workflow, baut die `pixellimo.jar` und hängt sie ans Release an — die `latest/download/pixellimo.jar`-URL zeigt immer auf die aktuellste Version.
 
 ## Lizenz
 

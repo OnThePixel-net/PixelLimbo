@@ -1,17 +1,14 @@
-name: Build
+name: Release
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  attach-jar:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,10 +26,8 @@ jobs:
       - name: Build shadowJar
         run: ./gradlew --no-daemon shadowJar
 
-      - name: Upload Jar Artifact
-        uses: actions/upload-artifact@v4
+      - name: Attach jar to release
+        uses: softprops/action-gh-release@v2
         with:
-          name: pixellimo-${{ github.sha }}
-          path: build/libs/pixellimo.jar
-          if-no-files-found: error
-          retention-days: 30
+          files: build/libs/pixellimo.jar
+          fail_on_unmatched_files: true

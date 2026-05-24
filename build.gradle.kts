@@ -29,7 +29,7 @@ application {
 
 tasks.shadowJar {
     archiveClassifier.set("")
-    archiveFileName.set("limbo-server.jar")
+    archiveFileName.set("pixellimo.jar")
     mergeServiceFiles()
 }
 
