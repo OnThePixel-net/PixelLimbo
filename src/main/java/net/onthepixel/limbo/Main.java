@@ -125,16 +125,70 @@ public final class Main {
         // BrandName
         MinecraftServer.setBrandName("PixelLimo");
 
-        // Shutdown-Hook für Debug (falls JVM unerwartet beendet wird)
-        Runtime.getRuntime().addShutdownHook(new Thread(() ->
-                System.out.println("[PixelLimo] JVM Shutdown — Server wird beendet")));
+        // ==== DEBUG: System-Infos vorm Start ====
+        Runtime rt = Runtime.getRuntime();
+        System.out.printf("[PixelLimo][debug] JVM=%s %s, max-heap=%dMB, processors=%d%n",
+                System.getProperty("java.vm.name"),
+                System.getProperty("java.version"),
+                rt.maxMemory() / (1024 * 1024),
+                rt.availableProcessors());
+        System.out.printf("[PixelLimo][debug] cwd=%s%n", System.getProperty("user.dir"));
+        System.out.printf("[PixelLimo][debug] potatocloud.service.name=%s, potatocloud.node.port=%s%n",
+                System.getProperty("potatocloud.service.name"),
+                System.getProperty("potatocloud.node.port"));
+
+        // Shutdown-Hook für Debug (zeigt warum JVM endet — Stack-Trace im Log)
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("[PixelLimo][shutdown] JVM Shutdown initiiert");
+            for (Thread t : Thread.getAllStackTraces().keySet()) {
+                System.out.println("[PixelLimo][shutdown]   noch lebender Thread: " + t.getName() + " daemon=" + t.isDaemon());
+            }
+        }));
 
         // Start
-        server.start(host, port);
+        try {
+            server.start(host, port);
+        } catch (Throwable t) {
+            System.err.println("[PixelLimo][FATAL] server.start fehlgeschlagen: " + t);
+            t.printStackTrace();
+            throw t;
+        }
         System.out.printf("[PixelLimo] Server läuft auf %s:%d (online-mode=%s)%n", host, port, onlineMode);
+
+        // Self-Bind-Test: kann sich der Server selbst erreichen?
+        new Thread(() -> {
+            try {
+                Thread.sleep(500);
+                for (String testHost : new String[]{"127.0.0.1", "0.0.0.0", host}) {
+                    try (java.net.Socket s = new java.net.Socket()) {
+                        s.connect(new java.net.InetSocketAddress(testHost, port), 2000);
+                        System.out.printf("[PixelLimo][selftest] OK: %s:%d erreichbar%n", testHost, port);
+                    } catch (Exception e) {
+                        System.err.printf("[PixelLimo][selftest] FAIL: %s:%d → %s%n", testHost, port, e.getMessage());
+                    }
+                }
+            } catch (InterruptedException ignored) {}
+        }, "limbo-selftest").start();
 
         // PotatoCloud: Service als RUNNING markieren (nur wenn unter PC gestartet)
         PotatoCloudConnector.notifyStartedIfManaged();
+
+        // Heartbeat alle 30s — sehen wir im Log wenn JVM steht
+        Thread hb = new Thread(() -> {
+            long started = System.currentTimeMillis();
+            while (true) {
+                try {
+                    Thread.sleep(30000);
+                } catch (InterruptedException e) { return; }
+                long up = (System.currentTimeMillis() - started) / 1000;
+                long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+                int online = MinecraftServer.getConnectionManager().getOnlinePlayers().size();
+                System.out.printf("[PixelLimo][heartbeat] uptime=%ds, heap=%dMB, players=%d%n",
+                        up, usedMb, online);
+            }
+        }, "limbo-heartbeat");
+        hb.setDaemon(true);
+        hb.start();
 
         // Main-Thread am Leben halten falls Minestom irgendwann nur Daemon-Threads hätte
         // (z.B. in PotatoCloud-Containern wo sonst der Prozess sofort wieder stirbt)
