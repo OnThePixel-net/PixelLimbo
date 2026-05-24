@@ -154,11 +154,16 @@ public final class Main {
 
         // Start — dual-stack bind via IPv6-Wildcard wenn host=0.0.0.0,
         // sonst akzeptiert Netty-Epoll-Client (z.B. PotatoCloud-Velocity-Plugin)
-        // keine Verbindungen weil der IPv4-mapped-IPv6 connectet
+        // keine Verbindungen weil der IPv4-mapped-IPv6 connectet.
+        //
+        // WICHTIG: `new InetSocketAddress(port)` reicht NICHT — Java's
+        // anyLocalAddress() liefert per Default Inet4Address. Wir müssen
+        // explizit InetAddress.getByName("::") nehmen damit der Bind
+        // wirklich IPv6-Wildcard wird.
         java.net.SocketAddress bindAddr;
         if ("0.0.0.0".equals(host) || host == null || host.isBlank()) {
-            // Dual-Stack: bind auf IPv6-Wildcard (::), akzeptiert IPv4 + IPv6
-            bindAddr = new java.net.InetSocketAddress(port);
+            java.net.InetAddress wildcard6 = java.net.InetAddress.getByName("::");
+            bindAddr = new java.net.InetSocketAddress(wildcard6, port);
         } else {
             bindAddr = new java.net.InetSocketAddress(host, port);
         }
