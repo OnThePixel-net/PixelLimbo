@@ -125,12 +125,27 @@ public final class Main {
         // BrandName
         MinecraftServer.setBrandName("PixelLimo");
 
+        // Shutdown-Hook für Debug (falls JVM unerwartet beendet wird)
+        Runtime.getRuntime().addShutdownHook(new Thread(() ->
+                System.out.println("[PixelLimo] JVM Shutdown — Server wird beendet")));
+
         // Start
         server.start(host, port);
         System.out.printf("[PixelLimo] Server läuft auf %s:%d (online-mode=%s)%n", host, port, onlineMode);
 
         // PotatoCloud: Service als RUNNING markieren (nur wenn unter PC gestartet)
         PotatoCloudConnector.notifyStartedIfManaged();
+
+        // Main-Thread am Leben halten falls Minestom irgendwann nur Daemon-Threads hätte
+        // (z.B. in PotatoCloud-Containern wo sonst der Prozess sofort wieder stirbt)
+        Object keepAlive = new Object();
+        synchronized (keepAlive) {
+            try {
+                keepAlive.wait();
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     private Main() {}
