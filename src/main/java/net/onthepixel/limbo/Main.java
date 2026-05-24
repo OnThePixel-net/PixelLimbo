@@ -40,13 +40,20 @@ public final class Main {
         Component tabHeaderC = LegacyComponentSerializer.legacySection().deserialize(tabHeader);
         Component tabFooterC = LegacyComponentSerializer.legacySection().deserialize(tabFooter);
 
+        // Velocity-Forwarding hat Vorrang vor Online-Mode:
+        // Wenn ein Velocity-Secret vorhanden ist, sitzen wir hinter einem Velocity-Proxy
+        // der schon Mojang-Auth + Skins macht — Backend muss Auth.Velocity nutzen,
+        // sonst lehnt Limbo Verbindungen vom Proxy ab.
         Auth auth;
-        if (onlineMode) {
-            auth = new Auth.Online();
-        } else if (!velocitySecret.isBlank()) {
+        if (!velocitySecret.isBlank()) {
             auth = new Auth.Velocity(velocitySecret);
+            System.out.println("[PixelLimo] Auth-Mode: Velocity (Forwarding-Secret gesetzt)");
+        } else if (onlineMode) {
+            auth = new Auth.Online();
+            System.out.println("[PixelLimo] Auth-Mode: Online (Mojang)");
         } else {
             auth = new Auth.Offline();
+            System.out.println("[PixelLimo] Auth-Mode: Offline");
         }
 
         MinecraftServer server = MinecraftServer.init(auth);
@@ -155,10 +162,26 @@ public final class Main {
         }
         System.out.printf("[PixelLimo] Server läuft auf %s:%d (online-mode=%s)%n", host, port, onlineMode);
 
-        // Self-Bind-Test: kann sich der Server selbst erreichen?
+        // Self-Bind-Test + Kernel-Listen-Dump: was sehen wir wirklich?
         new Thread(() -> {
             try {
                 Thread.sleep(500);
+                // Netzwerk-Interfaces ausgeben
+                try {
+                    java.util.Enumeration<java.net.NetworkInterface> nets = java.net.NetworkInterface.getNetworkInterfaces();
+                    while (nets.hasMoreElements()) {
+                        java.net.NetworkInterface ni = nets.nextElement();
+                        if (!ni.isUp()) continue;
+                        java.util.Enumeration<java.net.InetAddress> addrs = ni.getInetAddresses();
+                        while (addrs.hasMoreElements()) {
+                            System.out.printf("[PixelLimo][net] iface=%s addr=%s%n", ni.getName(), addrs.nextElement().getHostAddress());
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("[PixelLimo][net] iface-dump fail: " + e.getMessage());
+                }
+
+                // Self-connect-Tests
                 for (String testHost : new String[]{"127.0.0.1", "0.0.0.0", host}) {
                     try (java.net.Socket s = new java.net.Socket()) {
                         s.connect(new java.net.InetSocketAddress(testHost, port), 2000);
@@ -166,6 +189,30 @@ public final class Main {
                     } catch (Exception e) {
                         System.err.printf("[PixelLimo][selftest] FAIL: %s:%d → %s%n", testHost, port, e.getMessage());
                     }
+                }
+
+                // Kernel-Sicht: was hört wirklich auf welchem Port?
+                try {
+                    java.util.List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Path.of("/proc/net/tcp"));
+                    System.out.println("[PixelLimo][kernel] LISTEN-Sockets (aus /proc/net/tcp):");
+                    for (String line : lines) {
+                        // Format: sl local_addr:port remote_addr:port state ...
+                        // state 0A = LISTEN
+                        String[] parts = line.trim().split("\\s+");
+                        if (parts.length < 4) continue;
+                        if (!"0A".equals(parts[3])) continue;
+                        String[] localPair = parts[1].split(":");
+                        if (localPair.length != 2) continue;
+                        int hexPort = Integer.parseInt(localPair[1], 16);
+                        long hexAddr = Long.parseLong(localPair[0], 16);
+                        // little-endian IPv4
+                        String ip = String.format("%d.%d.%d.%d",
+                                hexAddr & 0xff, (hexAddr >> 8) & 0xff,
+                                (hexAddr >> 16) & 0xff, (hexAddr >> 24) & 0xff);
+                        System.out.printf("[PixelLimo][kernel]   %s:%d%n", ip, hexPort);
+                    }
+                } catch (Exception e) {
+                    System.err.println("[PixelLimo][kernel] /proc/net/tcp lesen fail: " + e.getMessage());
                 }
             } catch (InterruptedException ignored) {}
         }, "limbo-selftest").start();
