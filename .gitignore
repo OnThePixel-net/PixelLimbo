@@ -1,0 +1,41 @@
+# Build
+build/
+.gradle/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Runtime
+*.log
+limbo.properties
+viaproxy/
+ngrok
+ngrok.log
+ngrok.exe
+
+# Sekrete (ngrok-Token o.Ä. liegt in ~/.config/ngrok aber falls jemand das versehentlich kopiert)
+*-secret.*
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fremder Source-Code in diesem Ordner (nicht unser Repo)
+potatocloud-master/
+potatocloud-*.jar
+
+# Lokal-only Helper-Jars
+ViaProxy*.jar
+
+# Schematics (zu groß / persönlicher Build)
+*.schem
+*.schematic
+
+# Helper-Skripte (lokal, nicht im Repo)
+*.sh
+install-to-potatocloud.sh
+potatocloud-platform.yml
