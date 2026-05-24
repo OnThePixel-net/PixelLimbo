@@ -17,15 +17,17 @@ public final class Config {
             try (InputStream in = Files.newInputStream(FILE)) {
                 props.load(in);
             }
-            System.out.println("[PixelLimo] Config geladen aus " + FILE.toAbsolutePath());
+            System.out.println("[PixelLimo] Config loaded from " + FILE.toAbsolutePath());
         } else {
             try (var out = Files.newOutputStream(FILE)) {
-                props.store(out, "PixelLimo Konfiguration");
+                props.store(out, "PixelLimo configuration");
             }
-            System.out.println("[PixelLimo] Default-Config geschrieben nach " + FILE.toAbsolutePath());
+            System.out.println("[PixelLimo] Default config written to " + FILE.toAbsolutePath());
         }
 
-        // PotatoCloud schreibt Port in server.properties — der überschreibt limbo.properties
+        // PotatoCloud writes the port and proxy info into server.properties.
+        // Override our settings from there so PotatoCloud-managed services
+        // pick up the right port automatically.
         if (Files.exists(PC_FILE)) {
             Properties pc = new Properties();
             try (InputStream in = Files.newInputStream(PC_FILE)) {
@@ -34,14 +36,13 @@ public final class Config {
             String pcPort = pc.getProperty("server-port");
             if (pcPort != null && !pcPort.isBlank()) {
                 props.setProperty("server.port", pcPort);
-                System.out.println("[PixelLimo] Port-Override aus server.properties: " + pcPort);
+                System.out.println("[PixelLimo] Port override from server.properties: " + pcPort);
             }
-            // PotatoCloud SetupProxyStep schreibt forwarding-secrets + velocity-modern
             String fwdSecret = pc.getProperty("forwarding-secrets");
             String velocityModern = pc.getProperty("velocity-modern");
             if ("true".equals(velocityModern) && fwdSecret != null && !fwdSecret.isBlank()) {
                 props.setProperty("server.velocity-secret", fwdSecret);
-                System.out.println("[PixelLimo] Velocity-Forwarding aktiviert via server.properties");
+                System.out.println("[PixelLimo] Velocity forwarding enabled via server.properties");
             }
         }
 

@@ -14,10 +14,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Eigener SpongeSchematic-Loader (v2 + v3).
- * Liest .schem (gzip + NBT) und pastet die Blöcke in eine Minestom-Instance.
+ * SpongeSchematic loader (v2 + v3).
+ * Reads a .schem file (gzip + NBT) and pastes the blocks into a Minestom
+ * Instance at the given origin.
  *
- * Format-Doku: https://github.com/SpongePowered/Schematic-Specification
+ * Format reference: https://github.com/SpongePowered/Schematic-Specification
  */
 public final class SchematicLoader {
 
@@ -26,14 +27,14 @@ public final class SchematicLoader {
     public static Loaded load(Path schemFile, Instance instance, Pos pasteOrigin) throws IOException {
         CompoundBinaryTag root = BinaryTagIO.unlimitedReader().read(schemFile, BinaryTagIO.Compression.GZIP);
 
-        // v3 hat alles in "Schematic"-Subcompound verpackt, v2 direkt im Root.
+        // v3 wraps everything in a "Schematic" subcompound, v2 puts it at root.
         CompoundBinaryTag schem = root.getCompound("Schematic", root);
         int version = schem.getInt("Version", 2);
 
         return switch (version) {
             case 2 -> loadV2(schem, instance, pasteOrigin);
             case 3 -> loadV3(schem, instance, pasteOrigin);
-            default -> throw new IOException("Nicht unterstützte Schematic-Version: " + version);
+            default -> throw new IOException("Unsupported schematic version: " + version);
         };
     }
 
@@ -79,7 +80,8 @@ public final class SchematicLoader {
     }
 
     /**
-     * Parse "minecraft:oak_stairs[facing=east,half=top]" -> Minestom Block mit Properties.
+     * Parse "minecraft:oak_stairs[facing=east,half=top]" into a Minestom Block
+     * with the right state properties applied.
      */
     private static Block parseBlockState(String raw) {
         String name = raw;
@@ -97,7 +99,7 @@ public final class SchematicLoader {
         }
         Block block = Block.fromKey(name);
         if (block == null) {
-            // Unbekannter Block (z. B. neuer Block-Name in der Schematic) -> Air
+            // Unknown block id (e.g. newer block name not in this Minestom version)
             return Block.AIR;
         }
         return props.isEmpty() ? block : block.withProperties(props);
@@ -118,7 +120,7 @@ public final class SchematicLoader {
                 b = data[i++];
                 value |= (b & 0x7F) << shift;
                 shift += 7;
-                if (shift > 35) throw new IllegalStateException("VarInt zu groß");
+                if (shift > 35) throw new IllegalStateException("VarInt too large");
             } while ((b & 0x80) != 0);
 
             int x = index % width;

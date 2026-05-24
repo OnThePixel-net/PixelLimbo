@@ -6,6 +6,13 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
 
 permissions:
   contents: write
@@ -31,35 +38,52 @@ jobs:
       - name: Build shadowJar
         run: ./gradlew --no-daemon shadowJar
 
-      # --- Auto-Release: bei Push auf main neuen Tag bauen ---
-      - name: Compute auto-tag
-        if: github.event_name == 'push'
-        id: tag
+      # ----- Compute next semver tag (push or manual dispatch) -----
+      - name: Compute next semver tag
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        id: ver
         run: |
-          # Tag-Format: build-<count>-<shortSha>  (eindeutig + sortierbar)
-          COUNT=$(git rev-list --count HEAD)
-          SHORT=${GITHUB_SHA::7}
-          echo "tag=build-${COUNT}-${SHORT}" >> "$GITHUB_OUTPUT"
+          set -eu
+          # Last semver tag (vX.Y.Z), default to v0.0.0 if none yet
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          last=${last:-v0.0.0}
+          ver=${last#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<<"$ver"
 
-      - name: Create auto-release with jar
-        if: github.event_name == 'push'
+          bump="${{ github.event.inputs.bump || 'patch' }}"
+          case "$bump" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+            *) echo "unknown bump: $bump"; exit 1 ;;
+          esac
+
+          new="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "last=$last"
+          echo "new=$new"
+          echo "tag=$new" >> "$GITHUB_OUTPUT"
+          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Create auto-release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
           body: |
-            Auto-Release vom Push `${{ github.sha }}`.
+            Automated release from commit `${{ github.sha }}`.
 
-            **Commit-Message:** ${{ github.event.head_commit.message }}
-
-            PotatoCloud-URL (immer aktuellster Release):
+            **Latest-release jar URL** (always points at newest release):
             `https://github.com/OnThePixel-net/PixelLimbo/releases/latest/download/pixellimo.jar`
+
+            Direct download for this version:
+            `https://github.com/OnThePixel-net/PixelLimbo/releases/download/${{ steps.ver.outputs.tag }}/pixellimo.jar`
           files: build/libs/pixellimo.jar
           fail_on_unmatched_files: true
           make_latest: true
 
-      # --- Manueller Release-Trigger: Jar an existierendes Release anhängen ---
-      - name: Attach jar to manual release
+      # ----- Manual release trigger: just attach the jar -----
+      - name: Attach jar to existing release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:

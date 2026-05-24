@@ -6,14 +6,14 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Minimaler PotatoCloud-Node-Connector.
+ * Minimal PotatoCloud node connector.
  *
- * Wenn das System-Property {@code potatocloud.service.name} und
- * {@code potatocloud.node.port} gesetzt sind, verbinden wir uns mit dem Node
- * und schicken den {@code ServiceStartedPacket} (Packet-ID 3). Damit setzt
- * PotatoCloud den Service-Status von STARTING auf RUNNING.
+ * If the system properties {@code potatocloud.service.name} and
+ * {@code potatocloud.node.port} are set, connect to the node and send
+ * {@code ServiceStartedPacket} (packet id 3) so PotatoCloud flips the
+ * service status from STARTING to RUNNING.
  *
- * Packet-Wire-Format (siehe NettyPacketEncoder in PotatoCloud):
+ * Wire format (see NettyPacketEncoder in PotatoCloud):
  * <pre>
  *   int32 totalLength    // = 4 (packetId) + 4 (stringLen) + nameBytes.length
  *   int32 packetId       // 3 = SERVICE_STARTED
@@ -21,9 +21,10 @@ import java.nio.charset.StandardCharsets;
  *   byte[] nameBytes     // UTF-8
  * </pre>
  *
- * Wir lassen die Socket-Verbindung offen damit der Node uns als "lebt"
- * sieht (Memory-Updates und sonstige Broadcasts gehen aktuell ins Leere,
- * was OK ist — Status bleibt RUNNING, ProcessChecker watcht den OS-Prozess).
+ * The socket is kept open so the node continues to see us as alive.
+ * Broadcasts from the node (memory updates etc.) are silently discarded —
+ * status stays RUNNING and PotatoCloud's ProcessChecker watches the OS
+ * process directly.
  */
 public final class PotatoCloudConnector {
 
@@ -40,7 +41,7 @@ public final class PotatoCloudConnector {
         try {
             nodePort = Integer.parseInt(nodePortStr);
         } catch (NumberFormatException e) {
-            System.err.println("[PixelLimo] potatocloud.node.port ist keine Zahl: " + nodePortStr);
+            System.err.println("[PixelLimo] potatocloud.node.port is not a number: " + nodePortStr);
             return;
         }
 
@@ -60,12 +61,15 @@ public final class PotatoCloudConnector {
                 out.write(nameBytes);
                 out.flush();
 
-                System.out.println("[PixelLimo] PotatoCloud: ServiceStarted gesendet (service=" + serviceName + ", node=:"+ nodePort + ")");
+                System.out.printf("[PixelLimo] PotatoCloud: notified node, service=%s, node=:%d%n",
+                        serviceName, nodePort);
 
-                // Verbindung offen halten — bis Prozess endet oder Node die Verbindung schließt
-                sock.getInputStream().read();  // blockt bis EOF / disconnect
+                // Hold the connection open until the process exits or the node
+                // closes it from its end.
+                //noinspection ResultOfMethodCallIgnored
+                sock.getInputStream().read();
             } catch (Exception e) {
-                System.err.println("[PixelLimo] PotatoCloud-Connector Fehler: " + e.getMessage());
+                System.err.println("[PixelLimo] PotatoCloud connector error: " + e.getMessage());
             }
         }, "PotatoCloudConnector");
         t.setDaemon(true);
